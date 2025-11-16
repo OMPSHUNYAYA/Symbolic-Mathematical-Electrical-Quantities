@@ -1,0 +1,240 @@
+STAMP SPEC — Shunyaya Symbolic Mathematical Electrical Quantities (SSMEQ)
+Status: Public Research Release (v2.0)
+Date: November 14, 2025
+Caution: Research/observation only. Not for critical decision-making.
+
+Purpose
+Define a portable, tamper-evident continuity stamp for SSMEQ records.
+The stamp proves when a record was emitted, what canonical subset was committed, and how this record links to the previous one — 
+while keeping raw telemetry unchanged (phi((m,a)) = m at the SSM layer).
+
+One-line idea
+stamp is a tiny ASCII string that makes electrical timelines provable without touching the underlying measurements.
+
+0. Shape (canonical string)
+SSMCLOCK1|<iso_utc>|nonce=<nonce>|sha256=<hex>|prev=<hex_or_start>
+
+
+SSMCLOCK1 — literal identifier (versioned clock format).
+
+iso_utc — UTC time YYYY-MM-DDThh:mm:ssZ (optionally YYYY-MM-DDThh:mm:ss.sssZ).
+
+nonce — sender-chosen ASCII token (8–64 chars) for uniqueness.
+
+sha256 — lowercase hex digest (64 hex) of the canonical subset bytes.
+
+prev — lowercase hex digest (64 hex) of the previous record’s canonical subset, or a start sentinel.
+
+Start sentinel: use NONE (demo profile) or nil (strict profile). Receivers MAY case-fold and accept either, as declared by manifest policy.
+All keys (nonce=, sha256=, prev=) and separators (|) are fixed and in this order.
+
+1. Field semantics
+
+iso_utc (clock anchor).
+Must be UTC with trailing Z. Recommended non-decreasing per chain. Clock skew is a policy concern; the string remains verifiable.
+
+nonce (collision breaker).
+URL-safe ASCII [A–Z a–z 0–9 - _], unique in a rolling window (for example, 24h) for a given channel or chain. Not secret; avoid PII.
+
+sha256 (commitment).
+Digest over the canonical subset of this SSMEQ record. Always 64 lowercase hex.
+
+prev (link).
+Digest over the canonical subset of the previous SSMEQ record in this chain.
+For a new chain, set to the configured start sentinel (NONE or nil) per manifest policy.
+Branching or separate evidence streams require a new chain start.
+
+2. Construction (sender)
+
+2.1 Choose canonical subset bytes.
+Follow the SSMEQ manifest’s recipe (included fields, order, whitespace, newline, encoding). Example:
+
+bytes := JOIN_WITH_NEWLINES([
+  timestamp,
+  channel_id,
+  e_V,
+  e_I,
+  e_P,
+  r_P,
+  band_P,
+  manifest_id
+])
+sha256 := SHA256(bytes)
+
+
+2.2 Resolve prev.
+
+If a prior declaration exists in this chain:
+prev := sha256(previous_canonical_subset)
+
+Else (first record in a chain):
+prev := NONE (or nil) as specified in the SSMEQ manifest or stamp policy.
+
+2.3 Pick nonce.
+
+Random or sequence-derived (8–64 chars).
+
+Ensure practical uniqueness within the local chain and time window.
+
+2.4 Emit stamp.
+
+stamp := "SSMCLOCK1|" + iso_utc +
+         "|nonce="  + nonce  +
+         "|sha256=" + sha256 +
+         "|prev="   + prev
+
+
+2.5 Attach.
+
+Place in a field such as: SSMEQ-Stamp: <stamp> or a JSON key "stamp": "<stamp>".
+
+Underlying telemetry (V_rms, I_rms, P, f, pf, THD, etc.) stays byte-exact in its own lane.
+
+3. Canonical subset (what is committed)
+
+An SSMEQ manifest MUST publish a canonicalization recipe, including:
+
+Included fields (names, order).
+
+Optional payload byte ranges (for example, waveform slices).
+
+Whitespace rules (trim or preserve).
+
+Newline rule (LF join).
+
+Encoding (UTF-8).
+
+Receivers recompute SHA256(canonical_subset_bytes) and compare to sha256.
+Changing the recipe requires a new manifest_id.
+
+4. Verification (receiver/intermediary)
+
+4.1 Basic checks
+
+Prefix SSMCLOCK1| present.
+
+Keys appear in order: nonce=, sha256=, prev=.
+
+iso_utc syntactically valid UTC.
+
+sha256 and prev are 64-hex (or prev is an allowed start sentinel).
+
+Receivers MAY case-fold hex on compare.
+
+4.2 Commitment check
+
+Rebuild canonical subset per the referenced SSMEQ manifest_id.
+
+Compute sha256 := SHA256(bytes).
+
+MUST equal the sha256 embedded in the stamp.
+
+4.3 Continuity check
+
+For records k and k-1, verify:
+stamp[k].prev == sha256[k-1].
+
+Recommended monotonic time: iso_utc[k] >= iso_utc[k-1] per chain.
+
+On failure: treat continuity as broken; behave per policy (for example, quarantine or mark non-evidential).
+
+5. Chain rules
+
+Append-only.
+New stamps append; history is never rewritten.
+
+Gaps.
+A missing link renders the chain non-evidential from that point onward.
+
+Forks.
+Use distinct starts (prev = NONE or nil) for parallel chains (for example, different feeders or logical evidence segments).
+
+Rotation.
+Chains may rotate at policy events (for example, new manifest, major maintenance). Rotations should be logged, with the last HEAD captured in a checkpoint.
+
+6. Failure handling (deterministic)
+
+Bad format.
+Reject the stamp (invalid); payload and SSMEQ fields may still flow as ordinary telemetry.
+
+Digest mismatch.
+Mark integrity failure; treat the declaration as untrusted or non-evidential. Payload still available for observation-only use.
+
+Unknown manifest.
+Hold for review until the manifest is available; do not assume anchors, lenses, or canonical subset rules.
+
+Broken chain.
+Accept telemetry (unchanged) but mark the stamp as non-evidential and stop continuity scoring for that chain segment.
+
+7. Security & privacy
+
+No secrets in the stamp.
+Do not embed identifiers or PII in nonce or anywhere in the stamp.
+
+Bounded disclosure.
+Commit only the canonical subset your SSMEQ policy declares; undisclosed fields remain outside the commitment.
+
+Replay resilience.
+Commitment + continuity make selective deletion or reordering visible at the evidence level.
+
+Clock drift.
+The chain remains mathematically verifiable even with drift; policy may flag or quarantine records when drift exceeds configured allowed_skew_s.
+
+8. Examples (illustrative)
+SSMCLOCK1|2025-11-14T10:58:12Z|nonce=9Kc2a_tQ|sha256=2f6c0e4b5b0c2d1f9f1a3c6e0e1a9b0dd3a9c5c2d2e1b4f0c9e7a8d6b3f2c1a0|prev=NONE
+
+SSMCLOCK1|2025-11-14T10:58:27Z|nonce=9Kc2a_tR|sha256=8b1d7f2c4a0e9e5c6d3a1b0f0e2d1c3b4a5f6e7d8c9b0a1f2e3d4c5b6a798012|prev=2f6c0e4b5b0c2d1f9f1a3c6e0e1a9b0dd3a9c5c2d2e1b4f0c9e7a8d6b3f2c1a0
+
+9. ABNF (reference)
+stamp   = "SSMCLOCK1" "|" iso-utc "|" "nonce=" nonce
+          "|" "sha256=" hex64 "|" "prev=" (hex64 / "NONE" / "nil")
+
+iso-utc = 4DIGIT "-" 2DIGIT "-" 2DIGIT "T"
+          2DIGIT ":" 2DIGIT ":" 2DIGIT ["." 3DIGIT] "Z"
+
+nonce   = 8*64( ALPHA / DIGIT / "-" / "_" )
+
+hex64   = 64( DIGIT / %x61-66 ) ; 64 lowercase hex chars
+
+10. Conformance summary (paste-ready)
+
+Sender MUST:
+
+Compute sha256 over the canonical subset.
+
+Set prev to the prior subset digest (or allowed start sentinel).
+
+Emit SSMCLOCK1|... and attach as a stamp field.
+
+Receiver MUST:
+
+Recompute sha256 and compare with the stamp.
+
+Verify prev linkage where continuity matters.
+
+Apply SSMEQ manifest policy to decide how to treat failures.
+
+Intermediary MUST:
+
+Pass through committed bytes and the original stamp.
+
+MUST NOT alter existing stamps.
+
+MAY append its own observation stamp (append-only) to record handling events.
+
+Profiles & extensions (non-normative, optional)
+
+Nonce base64url option.
+Profiles MAY permit base64url-style nonces; if enabled, receivers MUST validate decoded length 8–64 chars and restrict serialization to URL-safe characters.
+
+Auxiliary clock header (display only).
+A non-canonical helper MAY be carried for UI or diagnostics, for example:
+
+SSMEQ-Aux-Clock: MONO|123456789|delta_ms=17
+
+
+The stamp’s iso_utc remains the only canonical time anchor for continuity checks.
+
+One-line takeaway
+A single ASCII stamp — SSMCLOCK1|... — lets any verifier replay when an SSMEQ record was committed, what bytes were bound by sha256, 
+and how that record chains to the one before it, all without ever touching the underlying electrical measurements.

@@ -1,0 +1,259 @@
+GETTING STARTED
+Shunyaya Symbolic Mathematical Electrical Quantities (SSMEQ)
+Version: 2.0
+Date: November 14, 2025
+Caution: Research/observation only. Not for critical decision-making.
+
+Goal
+Emit and verify SSMEQ electrical records without changing existing telemetry.
+
+Day-1: Add symbolic fields beside your volts, amps, watts.
+
+Day-7: Publish what you promise (manifest + canonical subset).
+
+Day-30: Let analytics, alarms, and audits use the symbolic layer.
+
+Prerequisites
+
+Attachment point.
+A place to carry extra fields beside raw telemetry (new columns in CSV, extra tags in a message bus, JSON fields, etc.).
+
+UTC clock (optional, for stamping).
+Used if you also attach continuity stamps via SSM-Clock / SSM-Clock Stamp.
+
+A published manifest_id defining:
+
+Anchors and scales: V_ref, I_ref, f_ref, pf_ref, P_scale, THD_ref.
+
+Lenses for zero-centric contrasts:
+
+e_V := ln( V_rms / V_ref )
+
+e_I := ln( I_rms / I_ref )
+
+e_f := ln( f / f_ref )
+
+e_P := asinh( P / P_scale )
+
+Health dials (optional): a_pf, a_THD, limit dials such as a_upper, a_lower.
+
+Residuals:
+
+r_P := e_P_meas - ( e_V + e_I + ln( pf / pf_ref ) )
+
+Bands and cutpoints over e_Q or a_Q (for example, GREEN/AMBER/RED).
+
+Canonical subset recipe for sha256=... commitment (which fields are committed, in what order, with what newline and whitespace rules).
+
+Day-1 — Emit Minimal SSMEQ Records (Sidecar Only)
+
+Sender MUST
+
+Preserve raw telemetry.
+Do not change existing channels such as V_rms, I_rms, P, f, pf, THD.
+
+Attach the following symbolic fields (names illustrative):
+
+e_V: zero-centric voltage contrast (e_V := ln( V_rms / V_ref ))
+
+e_I: zero-centric current contrast (e_I := ln( I_rms / I_ref ))
+
+e_f: zero-centric frequency contrast (e_f := ln( f / f_ref ))
+
+e_P: zero-centric power contrast (e_P := asinh( P / P_scale ))
+
+r_P: power consistency residual (r_P := e_P_meas - ( e_V + e_I + ln( pf / pf_ref ) ))
+
+band_P: label such as "GREEN", "AMBER", "RED" derived from e_P, r_P, and dials as per the manifest
+
+manifest_id: profile name used to compute all of the above
+
+Optionally attach integrity and continuity fields (if enabled by policy):
+
+ssmeq-commit: sha256=<hex>
+
+ssmeq-stamp: SSMCLOCK1|<iso_utc>|nonce=<...>|sha256=<...>|prev=<...>
+
+Compute canonical subset commitment, for example:
+
+bytes := JOIN_WITH_NEWLINES([
+  timestamp,
+  channel_id,
+  e_V,
+  e_I,
+  e_P,
+  r_P,
+  band_P,
+  manifest_id
+])
+sha256 := SHA256(bytes)
+
+
+Attach this digest as ssmeq-commit: sha256=<hex> if you want verifiable evidence.
+
+Receiver SHOULD
+
+Recompute SHA256(canonical_subset) from the SSMEQ record and match ssmeq-commit (if present).
+
+Verify bands:
+
+Check that band_P is consistent with the manifest’s cutpoints over e_P, r_P, and any dials.
+
+Record the SSMEQ envelope for replay:
+
+At minimum, store timestamp, channel_id, e_*, r_P, band_P, manifest_id, and (if used) sha256 and stamp.
+
+Day-7 — Publish What You Promise
+
+By Day-7, you should make SSMEQ replayable by third parties:
+
+Publish the manifest and canonical subset recipe.
+
+Anchors: V_ref, I_ref, f_ref, pf_ref, P_scale, THD_ref.
+
+Lenses, dials, residuals, and band rules.
+
+Canonical subset ordering, whitespace, newline, and encoding rules.
+
+Host a policy shelf containing versioned manifests (for example, PLANT_A.LV_FEEDERS.v1, PLANT_A.LV_FEEDERS.v2).
+
+Begin applying an acceptance checklist on inbound SSMEQ data:
+
+Required fields present (e_V, e_I, e_P, r_P, manifest_id, etc.).
+
+If ssmeq-commit is present:
+
+sha256 matches computed canonical subset bytes.
+
+band_P matches the manifest’s published cutpoints for the given e_*, a_*, and r_P.
+
+manifest_id is recognized.
+
+If ssmeq-stamp is present:
+
+prev chain continuity is consistent under SSM-Clock policy.
+
+Day-30 — Enforce and Verify
+
+By Day-30, the symbolic layer becomes active for decisions (while raw telemetry remains as a safety lane):
+
+Apply actions based on bands.
+
+For example, for band_P = RED, trigger alarms or advisory actions per local policy.
+
+For persistent r_P drift, schedule inspection of CT/PTs or wiring.
+
+If stamps are enabled, append observation stamps at key aggregation points:
+
+Always append-only; never rewrite ssmeq-commit or existing stamps.
+
+Store evidence bundles (if you are running formal evidence packs):
+
+envelopes.jsonl — one canonical subset per line.
+
+hashes.txt — list of sha256 hex digests.
+
+checkpoint.txt — HEAD=<64hex> for the last digest.
+
+verify.sh — script to recompute digests and print ALL CHECKS PASSED or a structured failure report.
+
+Reference Snippets
+
+Zero-Centric Lenses
+
+e_V := ln( V_rms / V_ref )
+e_I := ln( I_rms / I_ref )
+e_f := ln( f / f_ref )
+e_P := asinh( P / P_scale )
+
+
+Power Residual
+
+r_P := e_P_meas - ( e_V + e_I + ln( pf / pf_ref ) )
+
+
+Health Dials (illustrative)
+
+a_pf  := clamp( pf, -1+eps_a, +1-eps_a )
+a_THD := tanh( c_THD * ln( 1 + THD/THD_ref ) )
+
+
+Fused Dial Alignment Pipeline (optional for combined health)
+
+a_c    := clamp( a_raw, -1+eps_a, +1-eps_a )
+u      := atanh( a_c )
+U     += w*u
+W     += w
+a_fused := tanh( U / max(W, eps_w) )
+
+
+Tolerance notes:
+
+eps_a > 0 and eps_w > 0 prevent edge pathologies (for example, atanh(±1), divide-by-zero).
+
+Choose display precision appropriate to your serializer; verification binds canonical subset bytes, not your UI formatting.
+
+Continuity Stamp (Example Shape, if used)
+
+SSMCLOCK1|2025-11-10T10:02:11Z|nonce=9f3a..|sha256=7c4b..|prev=5a1e..
+
+
+Minimal SSMEQ Envelope (Illustrative)
+
+{
+  "timestamp":   "2025-11-14T10:02:11Z",
+  "channel_id":  "FEEDER_A.PHASE_R",
+  "e_V":         "-0.0123",
+  "e_I":         "+0.0845",
+  "e_P":         "+0.0201",
+  "r_P":         "+0.0012",
+  "band_P":      "GREEN",
+  "manifest_id": "PLANT_A.LV_FEEDERS.v1",
+  "sha256":      "7c4b...e1",   // optional: ssmeq-commit
+  "stamp":       "SSMCLOCK1|2025-11-14T10:02:11Z|nonce=9f3a..|sha256=7c4b..|prev=5a1e.."  // optional
+}
+
+Troubleshooting
+Condition	Treatment
+sha256 mismatch	Quarantine declaration; preserve raw telemetry.
+Missing e_* or r_P	Treat record as non-SSMEQ or partial; do not rely on bands.
+Unknown manifest_id	Hold until manifest is fetched; do not infer anchors or cutpoints.
+band_P inconsistent	Flag as policy violation; recompute band from e_* and r_P.
+Broken stamp chain	Accept payload; mark declaration non-evidential (if stamps are in use).
+Wire / Storage Format Guidance
+
+Use ASCII-safe field names.
+
+Keep case-exact values for manifest_id and bands.
+
+When computing ssmeq-commit, canonical subset bytes must be byte-accurate, not pretty-printed differently across systems.
+
+Security & Clock Hygiene (if using stamps)
+
+stamp is tamper-evident, not a substitute for channel encryption or authentication.
+
+Use UTC with a trailing Z (for example, 2025-11-14T10:02:11Z).
+
+Skew tolerance (for example, ±120 seconds) is a manifest / policy choice.
+
+Versioning
+
+Increment manifest_id when anchors, lenses, band cutpoints, or disclosure rules change.
+
+Keep the canonical subset recipe stable across minor manifest revisions when possible.
+
+If the canonical subset itself changes → mint a new manifest_id.
+
+Testing Loop
+
+Generate an SSMEQ record with e_*, r_P, bands, and manifest_id.
+
+Compute sha256 over the canonical subset and attach as ssmeq-commit.
+
+Run verify.sh against the evidence bundle (if used).
+
+Expect ALL CHECKS PASSED or a clear failure reason.
+
+One-Line Takeaway
+The volts, amps, and watts never change.
+The electrical story becomes zero-centric, replayable, and verifiable for everyone who shares the manifest.

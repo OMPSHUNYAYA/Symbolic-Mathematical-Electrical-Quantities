@@ -1,0 +1,163 @@
+CANONICAL SUBSET RECIPE
+Shunyaya Symbolic Mathematical Electrical Quantities (SSMEQ)
+Status: Public Research Release (v2.0)
+Date: November 14, 2025
+Caution: Research/observation only. Not for critical decision-making.
+
+Purpose
+Define how senders and receivers build the exact byte stream used for sha256=... commitment for SSMEQ records. The same byte recipe must produce the same digest everywhere.
+
+Scope
+This recipe is declared in the manifest and MUST be replayable by any receiver. Changing the recipe requires minting a new manifest_id.
+Typical SSMEQ fields included in the canonical subset are things like timestamp, channel_id, e_V, e_I, e_f, e_P, r_P, band_Q, and manifest_id, but the exact selection is manifest-governed.
+
+1) Inputs
+(illustrative names; bound in manifest.canonical_subset)
+
+ordering: stable list of field names and optional payload byte ranges, e.g.
+["timestamp","channel_id","e_V","e_I","e_P","r_P","band_Q","manifest_id"] or ["headerA","headerB","payload[0:256]"].
+
+whitespace: "trim" or "preserve".
+
+newline: "LF" (literal \n).
+
+byte_ranges: array of {start,end} for payload slicing, e.g.
+[{"start":0,"end":255}].
+
+normalization: "none" or algorithm tag if future-safe transforms are added (today: "none").
+
+encoding: all textual items encoded as UTF-8 bytes before concatenation.
+
+field_lookup: map telling how to extract each named item (e.g., from an SSMEQ record map or raw payload).
+
+disclosure: which logical parts are declared (e.g., e_V+e_I+e_P+band_Q+manifest_id) — published for human clarity, not used in hashing.
+
+Token grammar (clarity helpers)
+
+Header/token name: a bare name like "timestamp" or "e_V" → look up case-exact key in the SSMEQ record map.
+
+Payload slice token: "payload[i:j]" with inclusive i and inclusive j, 0 ≤ i ≤ j. This is optional and only used if you also commit slices of a raw payload block (for example, waveform bytes).
+
+Regex helpers (optional):
+
+payload\[(\d+):(\d+)\]
+
+^[A-Za-z0-9_\-]+$ for simple header/field keys
+
+2) Deterministic Rules
+
+Exact bytes only. Hash is computed over bytes, not pretty-printed strings.
+
+Stable order. Use ordering exactly as listed. No extra fields, no reordering.
+
+Whitespace policy. If whitespace=="trim", apply trimming before UTF-8 encoding; if "preserve", use as-is.
+
+Newlines. Join parts with a single \n (LF) regardless of platform. Do not add a trailing newline after the last part.
+
+Ranges. payload[i:j] means inclusive i to inclusive j over raw payload bytes.
+
+Normalization. If "none", do nothing beyond the whitespace rule.
+
+No implicit defaults. Every behavior above must be declared in the manifest, or the recipe is invalid.
+
+3) Canonical Algorithm
+
+parts := []
+
+For each token t in ordering:
+  If t is a field name (e.g., "timestamp" or "e_V"):
+    v := record[t]             # string or stringified scalar; case-exact key
+    if whitespace == "trim": v := trim(v)
+    b := UTF8(v)               # encode exactly once
+    parts.push(b)
+
+  Else if t is a payload slice (e.g., "payload[0:256]"):
+    b := payload_bytes[0:256]  # inclusive end as declared
+    parts.push(b)
+
+bytes  := JOIN_WITH("\n", parts)   # byte join with a single LF; no final LF
+digest := SHA256(bytes)            # 32-byte hash; when logged, use lowercase hex
+
+
+4) Example (copy-ready)
+
+ordering     : ["timestamp","channel_id","e_V","e_I","e_P","r_P","band_Q","manifest_id"]
+whitespace   : "trim"
+newline      : "LF"
+byte_ranges  : []
+normalization: "none"
+encoding     : "utf-8"
+
+
+Example pseudocode
+
+bytes  := JOIN_WITH_NEWLINES([
+  timestamp,
+  channel_id,
+  e_V,
+  e_I,
+  e_P,
+  r_P,
+  band_Q,
+  manifest_id
+])
+sha256 := SHA256(bytes)
+
+
+If waveform or raw payload slices are also committed (optional):
+
+ordering     : ["timestamp","channel_id","e_V","e_I","e_P","r_P","band_Q","manifest_id","payload[0:256]"]
+byte_ranges  : [{"start":0,"end":255}]
+
+
+5) Conformance Checks (recommended)
+
+Replay test:
+Receiver recomputes sha256 from the SSMEQ record + manifest recipe and must match the published sha256.
+
+Order test:
+Swapping any two ordering items must flip the digest (guards against accidental reordering).
+
+Range test:
+Changing any byte within a declared range must flip the digest.
+
+Whitespace test:
+Set whitespace="trim" vs "preserve" on the same logical strings and verify expected digests differ.
+
+LF test:
+Ensure \r\n vs \n sources normalize to \n at join time.
+
+6) Error Handling
+
+Missing field:
+If any ordering token cannot be resolved, verification fails with reason="missing_field".
+
+Bad range:
+If a range exceeds payload bounds, verification fails with reason="range_oob".
+
+Undeclared behavior:
+If a needed behavior is not in the manifest (e.g., newline policy), verification fails with reason="recipe_undefined".
+
+7) Security / Integrity Notes
+
+Byte commitment, not semantics.
+The digest binds declared bytes only; undisclosed bytes are outside this commitment.
+
+No silent transforms.
+Avoid locale-dependent or platform-dependent conversions. Keep normalization="none" unless well-specified.
+
+Auditability.
+Publish the recipe in the manifest so any party can verify independently.
+
+8) Manifest Binding
+
+manifest.canonical_subset.ordering      -> array of tokens
+manifest.canonical_subset.whitespace    -> "trim" or "preserve"
+manifest.canonical_subset.newline       -> "LF"
+manifest.canonical_subset.byte_ranges   -> list of {start,end} used by payload[...]
+manifest.canonical_subset.normalization -> today "none"
+manifest.canonical_subset.encoding      -> "utf-8"
+
+
+One-line takeaway
+Commit what you promise. Publish the SSMEQ byte recipe. Let every receiver recompute the same sha256 from e_*, r_P, bands, and manifest_id and arrive at the same answer.

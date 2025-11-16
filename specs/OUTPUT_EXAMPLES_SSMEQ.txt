@@ -1,0 +1,34 @@
+OUTPUT EXAMPLES — Shunyaya Symbolic Mathematical Electrical Quantities (SSMEQ)
+Status: Public Research Release (v2.0)
+Date: November 14, 2025
+Caution: Research/observation only. Not for critical decision-making.
+
+Notes for use
+• Format: JSON Lines (.jsonl) — one SSMEQ record per line.
+• Canonical shape (illustrative): { timestamp, channel_id, e_V, e_I, e_P, r_P, band_P, manifest_id, sha256, stamp }
+• Some examples omit sha256 / stamp on purpose (non-evidential or label-only mode).
+• Continuity: where present, each stamp links to the prior line’s sha256 via prev=....
+• Hex values below are illustrative placeholders.
+
+OUTPUT_SSMEQ.jsonl (copy-paste)
+
+{"timestamp":"2025-11-14T09:00:05Z","channel_id":"FEEDER_A.PHASE_R","e_V":"-0.0123","e_I":"+0.0845","e_P":"+0.0201","r_P":"+0.0012","band_P":"GREEN","manifest_id":"PLANT_A.LV_FEEDERS.v1","sha256":"7c4b1d2e3f405162738495a6b7c8d9e0fa1b2c3d4e5f60718293a4b5c6d7e8f9","stamp":"SSMCLOCK1|2025-11-14T09:00:05Z|nonce=9f3a7b2f6c2a|sha256=7c4b1d2e3f405162738495a6b7c8d9e0fa1b2c3d4e5f60718293a4b5c6d7e8f9|prev=GENESIS"}
+
+{"timestamp":"2025-11-14T09:00:07Z","channel_id":"FEEDER_A.PHASE_Y","e_V":"-0.0085","e_I":"+0.0910","e_P":"+0.0234","r_P":"+0.0028","band_P":"GREEN","manifest_id":"PLANT_A.LV_FEEDERS.v1","sha256":"2a7b3c1d4e5f60718293a4b5c6d7e8f90112a3b4c5d6e7f8091a2b3c4d5e6f70","stamp":"SSMCLOCK1|2025-11-14T09:00:07Z|nonce=5c0d8a91b77c|sha256=2a7b3c1d4e5f60718293a4b5c6d7e8f90112a3b4c5d6e7f8091a2b3c4d5e6f70|prev=7c4b1d2e3f405162738495a6b7c8d9e0fa1b2c3d4e5f60718293a4b5c6d7e8f9"}
+
+{"timestamp":"2025-11-14T09:00:09Z","channel_id":"FEEDER_A.PHASE_B","e_V":"-0.0150","e_I":"+0.0798","e_P":"+0.0179","r_P":"+0.0045","band_P":"AMBER","manifest_id":"PLANT_A.LV_FEEDERS.v1","sha256":"c1d2e3f405162738495a6b7c8d9e0fa1b2c3d4e5f60718293a4b5c6d7e8f9011","stamp":"SSMCLOCK1|2025-11-14T09:00:09Z|nonce=1f9d0e7231a0|sha256=c1d2e3f405162738495a6b7c8d9e0fa1b2c3d4e5f60718293a4b5c6d7e8f9011|prev=2a7b3c1d4e5f60718293a4b5c6d7e8f90112a3b4c5d6e7f8091a2b3c4d5e6f70"}
+
+{"timestamp":"2025-11-14T09:05:12Z","channel_id":"FEEDER_B.PHASE_R","e_V":"+0.0451","e_I":"+0.1203","e_P":"+0.0820","r_P":"+0.1150","band_P":"RED","manifest_id":"PLANT_A.LV_FEEDERS.v1","sha256":"0a1b2c3d4e5f60718293a4b5c6d7e8f90112a3b4c5d6e7f8091a2b3c4d5e6f71","stamp":"SSMCLOCK1|2025-11-14T09:05:12Z|nonce=b77c3a4e4b7f|sha256=0a1b2c3d4e5f60718293a4b5c6d7e8f90112a3b4c5d6e7f8091a2b3c4d5e6f71|prev=c1d2e3f405162738495a6b7c8d9e0fa1b2c3d4e5f60718293a4b5c6d7e8f9011"}
+
+{"timestamp":"2025-11-14T09:05:14Z","channel_id":"FEEDER_B.PHASE_R","e_V":"+0.0448","e_I":"+0.1199","e_P":"+0.0815","r_P":"+0.1120","band_P":"RED","manifest_id":"PLANT_A.LV_FEEDERS.v1","sha256":"f0e1d2c3b4a5968778695a4b3c2d1e0f00112233445566778899aabbccddeef1","stamp":"SSMCLOCK1|2025-11-14T09:05:14Z|nonce=9de43a106e1b|sha256=f0e1d2c3b4a5968778695a4b3c2d1e0f00112233445566778899aabbccddeef1|prev=0a1b2c3d4e5f60718293a4b5c6d7e8f90112a3b4c5d6e7f8091a2b3c4d5e6f71"}
+
+{"timestamp":"2025-11-14T09:10:00Z","channel_id":"FEEDER_C.PHASE_R","e_V":"-0.0030","e_I":"+0.0100","e_P":"+0.0040","r_P":"+0.0020","band_P":"GREEN","manifest_id":"PLANT_A.LV_FEEDERS.v2","sha256":"aa55cc33ee7799bb00dd22ff44aa66bb77889900aabbccddeeff112233445566","stamp":"SSMCLOCK1|2025-11-14T09:10:00Z|nonce=31a0cd5b0c6a|sha256=aa55cc33ee7799bb00dd22ff44aa66bb77889900aabbccddeeff112233445566|prev=f0e1d2c3b4a5968778695a4b3c2d1e0f00112233445566778899aabbccddeef1"}
+
+{"timestamp":"2025-11-14T09:10:02Z","channel_id":"FEEDER_C.PHASE_Y","e_V":"-0.0025","e_I":"+0.0090","e_P":"+0.0035","r_P":"+0.0018","band_P":"GREEN","manifest_id":"PLANT_A.LV_FEEDERS.v2"}
+
+{"timestamp":"2025-11-14T09:15:30Z","channel_id":"TRANSFORMER_1.TOTAL","e_V":"+0.0065","e_I":"+0.0310","e_P":"+0.0380","r_P":"+0.0355","band_P":"AMBER","manifest_id":"PLANT_A.MV_TRANSFORMERS.v1","sha256":"bb66dd44ff8811cc22ee33aa55bb77cc88990011aabbccddeeff001122334455","stamp":"SSMCLOCK1|2025-11-14T09:15:30Z|nonce=4b7f9a2e9de4|sha256=bb66dd44ff8811cc22ee33aa55bb77cc88990011aabbccddeeff001122334455|prev=aa55cc33ee7799bb00dd22ff44aa66bb77889900aabbccddeeff112233445566"}
+
+{"timestamp":"2025-11-14T09:20:00Z","channel_id":"PLANT_A.TOTAL_EXPORT","e_V":"+0.0010","e_I":"+0.0120","e_P":"+0.0135","r_P":"+0.0025","band_P":"GREEN","manifest_id":"PLANT_A.PLANT_EXPORT.v1","sha256":"cc77ee55aa9922dd33ff44bb66cc88dd99aa0011bbccddeeff11223344556677","stamp":"SSMCLOCK1|2025-11-14T09:20:00Z|nonce=0c6a8d2131a0|sha256=cc77ee55aa9922dd33ff44bb66cc88dd99aa0011bbccddeeff11223344556677|prev=bb66dd44ff8811cc22ee33aa55bb77cc88990011aabbccddeeff001122334455"}
+
+One-line takeaway
+These examples show SSMEQ records carrying e_*, r_P, band_P, and manifest_id — with optional sha256 and stamp — so any verifier can recompute the symbolic view and, where present, the canonical sha256 chain.
