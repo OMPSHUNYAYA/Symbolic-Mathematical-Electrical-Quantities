@@ -1,0 +1,115 @@
+{
+  "manifest_id": "SSMEQ_PLANT_DEMO.LV_FEEDERS.v2_0",
+  "version": "2.0",
+  "status": "public_research_release",
+  "anchors": {
+    "V_ref": 400.0,
+    "I_ref": 100.0,
+    "f_ref": 50.0,
+    "pf_ref": 0.98,
+    "P_scale": 40000.0,
+    "THD_ref": 5.0
+  },
+  "lenses": {
+    "e_V": "e_V := ln( V_rms / V_ref )",
+    "e_I": "e_I := ln( I_rms / I_ref )",
+    "e_f": "e_f := ln( f / f_ref )",
+    "e_P": "e_P := asinh( P / P_scale )"
+  },
+  "dials": {
+    "eps_a": 1e-06,
+    "eps_w": 1e-09,
+    "c_THD": 0.25,
+    "a_pf": "a_pf := clamp( pf, -1+eps_a, +1-eps_a )",
+    "a_THD": "a_THD := tanh( c_THD * ln( 1 + THD/THD_ref ) )",
+    "V_upper_factor": 1.1,
+    "e_V_upper": "ln( V_upper_factor )",
+    "k_upper": 1.0,
+    "a_upper": "a_upper := tanh( k_upper * ( e_V - e_V_upper ) )"
+  },
+  "residuals": {
+    "r_P": "r_P := e_P_meas - ( e_V + e_I + ln( pf / pf_ref ) )"
+  },
+  "bands": [
+    {
+      "label": "RED",
+      "target": "band_P",
+      "condition": "abs(r_P) > 0.10 or abs(a_pf) > 0.7",
+      "duty": {
+        "action": "investigate_immediately",
+        "window_s": 0,
+        "escalation_owner": "maintenance"
+      }
+    },
+    {
+      "label": "AMBER",
+      "target": "band_P",
+      "condition": "0.03 < abs(r_P) <= 0.10 and abs(a_pf) <= 0.7",
+      "duty": {
+        "action": "monitor_and_plan",
+        "window_s": 604800,
+        "escalation_owner": "planning"
+      }
+    },
+    {
+      "label": "GREEN",
+      "target": "band_P",
+      "condition": "abs(r_P) <= 0.03 and abs(a_pf) <= 0.3",
+      "duty": {
+        "action": "continue",
+        "window_s": 0,
+        "escalation_owner": "none"
+      }
+    }
+  ],
+  "disclosure": {
+    "mode": "full",
+    "expose_fields": [
+      "timestamp",
+      "channel_id",
+      "V_rms",
+      "I_rms",
+      "P",
+      "f",
+      "pf",
+      "THD",
+      "e_V",
+      "e_I",
+      "e_f",
+      "e_P",
+      "r_P",
+      "band_P",
+      "manifest_id",
+      "sha256",
+      "stamp"
+    ]
+  },
+  "canonical_subset": {
+    "fields": [
+      "timestamp",
+      "channel_id",
+      "e_V",
+      "e_I",
+      "e_P",
+      "r_P",
+      "band_P",
+      "manifest_id"
+    ],
+    "ordering": "exact",
+    "whitespace": "trim",
+    "newline": "LF",
+    "normalization": "none",
+    "encoding": "utf-8"
+  },
+  "hash": {
+    "algorithm": "sha256"
+  },
+  "stamp_policy": {
+    "enabled": true,
+    "clock": "SSMCLOCK1",
+    "timezone": "UTC",
+    "include_prev": true,
+    "nonce_bytes": 16,
+    "allowed_skew_s": 120
+  }
+}

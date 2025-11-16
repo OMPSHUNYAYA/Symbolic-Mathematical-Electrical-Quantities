@@ -1,0 +1,351 @@
+MANIFEST & BANDS
+Shunyaya Symbolic Mathematical Electrical Quantities (SSMEQ)
+Status: Public Research Release (v2.0)
+Date: November 14, 2025
+Caution: Research/observation only. Not for critical decision-making.
+
+Purpose. Define the policy object that turns SSMEQ’s symbolic lanes into deterministic, replayable electrical duty — and makes verification consistent across devices, fleets, and time.
+
+Scope. Schema, examples, and acceptance rules for: anchors, lenses, dials, residuals, bands, disclosure, canonical subset recipe, and (optionally) stamp policy used with SSMEQ.
+
+1) Manifest Object (authoritative rulebook)
+1.1 Required fields (top-level)
+{
+  "manifest_id": "PLANT_A.LV_FEEDERS.v1",
+  "title": "LV Feeders — Plant A — SSMEQ profile",
+  "description": "Anchors, lenses, dials, residuals, and bands for LV feeders.",
+  "created_utc": "2025-11-14T00:00:00Z",
+  "frozen": true,
+  "governance": {
+    "owner": "electrical-engineering",
+    "contact": "ee@plantA",
+    "deprecation": "mint new manifest_id"
+  },
+
+  "anchors": {
+    "V_ref": 400.0,       // volts (nominal line-to-line)
+    "I_ref": 100.0,       // amps  (typical rated feeder current)
+    "f_ref": 50.0,        // Hz    (nominal grid frequency)
+    "pf_ref": 0.98,       // target power factor (lagging)
+    "P_scale": 40000.0,   // watts (for e_P := asinh(P/P_scale))
+    "THD_ref": 5.0        // percent THD at acceptable baseline
+  },
+
+  "lenses": {
+    "e_V": "e_V := ln( V_rms / V_ref )",
+    "e_I": "e_I := ln( I_rms / I_ref )",
+    "e_f": "e_f := ln( f / f_ref )",
+    "e_P": "e_P := asinh( P / P_scale )"
+  },
+
+  "dials": {
+    "eps_a": 1e-6,
+    "eps_w": 1e-9,
+    "c_THD": 0.25,
+
+    "a_pf":  "a_pf := clamp( pf, -1+eps_a, +1-eps_a )",
+    "a_THD": "a_THD := tanh( c_THD * ln( 1 + THD/THD_ref ) )",
+
+    "V_upper_factor": 1.10,
+    "e_V_upper": "ln( V_upper_factor )",
+    "k_upper": 1.0,
+    "a_upper": "a_upper := tanh( k_upper * ( e_V - e_V_upper ) )"
+  },
+
+  "residuals": {
+    "r_P": "r_P := e_P_meas - ( e_V + e_I + ln( pf / pf_ref ) )"
+  },
+
+  "bands": [
+    {
+      "label": "RED",
+      "target": "band_P",
+      "condition": "abs(r_P) > 0.10 or abs(a_pf) > 0.7",
+      "duty": {
+        "action": "investigate_immediately",
+        "window_s": 0,
+        "escalation_owner": "maintenance"
+      },
+      "notes": "High inconsistency or poor power factor; schedule urgent inspection."
+    },
+    {
+      "label": "AMBER",
+      "target": "band_P",
+      "condition": "abs(r_P) > 0.03 and abs(r_P) <= 0.10",
+      "duty": {
+        "action": "monitor_and_plan",
+        "window_s": 604800,
+        "escalation_owner": "planning"
+      },
+      "notes": "Not urgent but should be addressed in planning window."
+    },
+    {
+      "label": "GREEN",
+      "target": "band_P",
+      "condition": "abs(r_P) <= 0.03 and abs(a_pf) <= 0.3",
+      "duty": {
+        "action": "continue",
+        "window_s": 0,
+        "escalation_owner": "none"
+      },
+      "notes": "Self-consistent quartet with acceptable power factor."
+    }
+  ],
+
+  "disclosure": {
+    "mode": "full",
+    "expose_fields": ["e_V","e_I","e_f","e_P","r_P","band_P","manifest_id","sha256","stamp"]
+  },
+
+  "canonical_subset": {
+    "ordering": [
+      "timestamp",
+      "channel_id",
+      "e_V",
+      "e_I",
+      "e_P",
+      "r_P",
+      "band_P",
+      "manifest_id"
+    ],
+    "whitespace": "trim",
+    "newline": "LF",
+    "byte_ranges": [],
+    "normalization": "none",
+    "encoding": "utf-8"
+  },
+
+  "stamp_policy": {
+    "enabled": true,
+    "clock": "SSMCLOCK1",
+    "timezone": "UTC",
+    "include_prev": true,
+    "nonce_bytes": 16,
+    "allowed_skew_s": 120
+  }
+}
+
+1.2 Invariants expressed in the manifest
+
+Value lane invariance.
+Raw channels such as V_rms, I_rms, P, f, pf, THD remain unchanged. They are the truth lane; SSMEQ only adds symbolic lanes on top.
+
+Zero-centric encoding.
+Lenses like e_V := ln( V_rms / V_ref ), e_I := ln( I_rms / I_ref ), e_f := ln( f / f_ref ), e_P := asinh( P / P_scale ) ensure:
+
+e_Q = 0 at nominal, e_Q > 0 above, e_Q < 0 below.
+
+Unit-invariance under shared anchors.
+
+Bounded dials.
+Dials such as a_pf, a_THD, a_upper live in (-1,+1) via clamp and tanh, making them safe to combine and compare across assets.
+
+Residual consistency.
+The manifest defines r_P := e_P_meas - ( e_V + e_I + ln( pf / pf_ref ) ) explicitly. Any party can replay this. Stable small |r_P| means self-consistent data; bias or jumps point to CT/PT or wiring issues.
+
+Band determinism.
+Bands (for example, GREEN/AMBER/RED for band_P) are defined via clear conditions on e_*, a_*, and r_P, not prose. Band mapping is replayable.
+
+Canonical subset commitment.
+The manifest spells out exactly which fields are committed into sha256=... and how the byte stream is built. No hidden behavior.
+
+Immutability.
+Once published, manifests are frozen. Changing anchors, lenses, dials, residuals, bands, or canonical subset requires a new manifest_id.
+
+2) Band Cutpoints and Boundary Clarity
+2.1 Declaring ranges and conditions
+
+Bands may be declared either as:
+
+Pure range over a dial (for example, a_Q):
+
+"range": { "low": -0.3, "high": +0.3, "low_inclusive": true, "high_inclusive": true }
+
+
+Composite condition over e_*, a_*, and residuals such as r_P:
+
+"condition": "abs(r_P) > 0.10 or abs(a_pf) > 0.7"
+
+
+Both styles are acceptable as long as the manifest uses one clear convention and remains replayable.
+
+2.2 Example policy (copy-ready)
+
+Illustrative band_P policy over r_P and a_pf:
+
+RED   : abs(r_P) > 0.10           or abs(a_pf) > 0.7
+AMBER : 0.03 < abs(r_P) <= 0.10   and abs(a_pf) <= 0.7
+GREEN : abs(r_P) <= 0.03          and abs(a_pf) <= 0.3
+
+2.3 Duty semantics
+
+Action is machine-executable (for example, investigate_immediately, monitor_and_plan, continue) — no prose-only labels.
+
+Window (window_s) is interpreted as a maximum delay for acting on the band (for example, 0 for immediate, 604800 for “within a week”).
+
+Escalation owner is a role, not a specific person (for example, maintenance, planning, operations).
+
+3) Canonical Subset Recipe (commitment sha256=...)
+3.1 Recipe elements
+
+Ordering. Stable list of SSMEQ fields (and optional payload slices) committed into the digest.
+
+Whitespace. "trim" or "preserve" — must be declared.
+
+Newline strategy. Always join with "\n" (LF).
+
+Byte ranges. Optional slices (for example, waveform bytes) if raw payload is included.
+
+Normalization. Today "none" — no locale or platform-dependent transforms.
+
+Encoding. Textual items encoded as UTF-8 bytes once before concatenation.
+
+3.2 Pseudocode (illustrative)
+bytes  := JOIN_WITH_NEWLINES([
+  timestamp,
+  channel_id,
+  e_V,
+  e_I,
+  e_P,
+  r_P,
+  band_P,
+  manifest_id
+])
+sha256 := SHA256(bytes)
+
+3.3 Receiver rule
+
+Recompute SHA256(canonical_subset_bytes) using the manifest recipe.
+
+Compare with declared sha256.
+
+Mismatch ⇒ quarantine or mark as non-evidential; never overwrite the sender’s claim.
+
+4) Effective Manifest (frozen, replay-ready)
+4.1 Purpose
+
+Produce a consumer-friendly artifact that expands defaults and removes ambiguity, suitable for direct use by scripts and tools.
+
+4.2 Deterministic build
+effective_manifest := {
+  manifest_id,
+  anchors:   { V_ref, I_ref, f_ref, pf_ref, P_scale, THD_ref },
+  lenses:    { e_V, e_I, e_f, e_P },
+  dials:     { eps_a, eps_w, c_THD, a_pf, a_THD, V_upper_factor, e_V_upper, k_upper, a_upper },
+  residuals: { r_P },
+
+  bands: [
+    // fully resolved conditions and duties for each label
+  ],
+
+  disclosure: {
+    mode,
+    expose_fields
+  },
+
+  canonical_subset: {
+    ordering,
+    whitespace,
+    newline,
+    byte_ranges,
+    normalization,
+    encoding
+  },
+
+  stamp_policy: {
+    enabled,
+    clock,
+    timezone,
+    include_prev,
+    nonce_bytes,
+    allowed_skew_s
+  }
+}
+
+4.3 Storage
+
+Save as EFFECTIVE_MANIFEST_SSMEQ.json beside the human-readable manifest.
+
+Include it in evidence bundles so any verifier can load one file and replay all SSMEQ logic.
+
+Example (compact)
+
+{
+  "manifest_id": "PLANT_A.LV_FEEDERS.v1",
+  "anchors": { "V_ref":400.0,"I_ref":100.0,"f_ref":50.0,"pf_ref":0.98,"P_scale":40000.0,"THD_ref":5.0 },
+  "lenses": {
+    "e_V":"e_V := ln( V_rms / V_ref )",
+    "e_I":"e_I := ln( I_rms / I_ref )",
+    "e_f":"e_f := ln( f / f_ref )",
+    "e_P":"e_P := asinh( P / P_scale )"
+  },
+  "residuals": {
+    "r_P":"r_P := e_P_meas - ( e_V + e_I + ln( pf / pf_ref ) )"
+  },
+  "bands": [
+    {"label":"RED","target":"band_P","condition":"abs(r_P) > 0.10 or abs(a_pf) > 0.7","duty":{"action":"investigate_immediately","window_s":0,"escalation_owner":"maintenance"}},
+    {"label":"AMBER","target":"band_P","condition":"0.03 < abs(r_P) <= 0.10 and abs(a_pf) <= 0.7","duty":{"action":"monitor_and_plan","window_s":604800,"escalation_owner":"planning"}},
+    {"label":"GREEN","target":"band_P","condition":"abs(r_P) <= 0.03 and abs(a_pf) <= 0.3","duty":{"action":"continue","window_s":0,"escalation_owner":"none"}}
+  ],
+  "disclosure": { "mode":"full","expose_fields":["e_V","e_I","e_f","e_P","r_P","band_P","manifest_id","sha256","stamp"] },
+  "canonical_subset": {
+    "ordering":["timestamp","channel_id","e_V","e_I","e_P","r_P","band_P","manifest_id"],
+    "whitespace":"trim",
+    "newline":"LF",
+    "byte_ranges":[],
+    "normalization":"none",
+    "encoding":"utf-8"
+  },
+  "stamp_policy": { "enabled":true,"clock":"SSMCLOCK1","timezone":"UTC","include_prev":true,"nonce_bytes":16,"allowed_skew_s":120 }
+}
+
+5) Acceptance & Audit Checklist (paste-ready)
+
+5.1 Structural
+
+manifest_id present and resolvable.
+
+frozen: true or archived copy stored.
+
+5.2 Anchors and lenses
+
+V_ref, I_ref, f_ref, pf_ref, P_scale, THD_ref declared.
+
+Lenses for e_V, e_I, e_f, e_P explicitly defined.
+
+Replay e_* on sample records; confirm expected zero-centric behavior.
+
+5.3 Dials and residuals
+
+eps_a, eps_w, c_THD declared.
+
+Dials a_pf, a_THD, a_upper defined and bounded in (-1,+1).
+
+r_P formula declared and replay-tested on sample data.
+
+5.4 Bands
+
+Bands cover the intended operating envelope (for example, normal vs. drift vs. fault) with no overlaps or gaps under their chosen conditions.
+
+Each band has a deterministic, machine-executable action, a window_s, and an escalation_owner.
+
+5.5 Disclosure
+
+Disclosure mode is clearly stated (for example, full vs. minimal).
+
+Exposed fields match what downstream tools expect.
+
+5.6 Canonical subset
+
+Recipe builds a stable byte stream for sha256=....
+
+Receiver recomputation of sha256 matches for sample records.
+
+5.7 Stamp policy (if enabled)
+
+SSMCLOCK1 format enforced.
+
+prev linking verified in sample chains; skew stays within tolerance.
+
+One-line takeaway
+SSMEQ manifests turn volts, amps, and watts into a shared, rulebook-driven symbolic language — so any receiver can replay anchors, lenses, residuals, and bands, and know exactly what each electrical record meant, when it was emitted, and what duty it implied.
